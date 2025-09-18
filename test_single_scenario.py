@@ -7,6 +7,7 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 import subprocess
 import sys
 import time
+import argparse
 
 def find_conda_path():
     """查找conda路径"""
@@ -22,7 +23,7 @@ def find_conda_path():
             return path
     return None
 
-def create_test_script():
+def create_test_script(scenario_file="bench2drive_00.xml"):
     """创建测试脚本"""
     conda_path = find_conda_path()
     
@@ -31,9 +32,9 @@ def create_test_script():
     else:
         conda_init = "# 使用系统conda命令"
     
-    # 选择指定的RouteScenario_1711场景进行测试
+    # 使用指定的场景文件
     route_path = "./leaderboard/data/bench2drive_split"
-    target_scenario = "bench2drive_00.xml"  # RouteScenario_1711, Town12, ParkingCutIn
+    target_scenario = scenario_file
     
     test_route_full_path = os.path.join(route_path, target_scenario)
     if not os.path.exists(test_route_full_path):
@@ -57,7 +58,7 @@ def create_test_script():
     # 配置文件
     cfg = {
         "agent": "simlingo",
-        "checkpoint": "./outputs/simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt",
+        "checkpoint": "./output/simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt",
         "benchmark": "bench2drive",
         "carla_root": "~/software/carla0915",
         "repo_root": "./",
@@ -260,10 +261,10 @@ exit $exit_code
     
     return job_file
 
-def run_test():
+def run_test(scenario_file="bench2drive_00.xml"):
     """运行测试"""
     print("=== 创建测试脚本 ===")
-    job_file = create_test_script()
+    job_file = create_test_script(scenario_file)
     
     if not job_file:
         return False
@@ -293,23 +294,55 @@ def run_test():
         return False
 
 def main():
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="单场景测试脚本")
+    parser.add_argument(
+        "--scenario", 
+        default="bench2drive_00.xml",
+        help="要测试的场景文件名 (默认: bench2drive_00.xml)"
+    )
+    parser.add_argument(
+        "--list-scenarios", 
+        action="store_true",
+        help="列出所有可用的场景文件"
+    )
+    args = parser.parse_args()
+    
+    # 如果用户要求列出场景
+    if args.list_scenarios:
+        scenario_path = "./leaderboard/data/bench2drive_split"
+        if os.path.exists(scenario_path):
+            print("📋 可用的场景文件:")
+            scenarios = [f for f in os.listdir(scenario_path) if f.endswith('.xml')]
+            scenarios.sort()
+            for i, scenario in enumerate(scenarios, 1):
+                size = os.path.getsize(os.path.join(scenario_path, scenario)) / 1024
+                print(f"  {i:3d}. {scenario:<20} ({size:.1f}KB)")
+            print(f"\n总共 {len(scenarios)} 个场景")
+            print("\n使用方法: python test_single_scenario.py --scenario bench2drive_XX.xml")
+        else:
+            print("❌ 场景目录不存在")
+        return
+    
+    scenario_file = args.scenario
     print("=== 单场景测试脚本 ===")
-    print("测试场景: RouteScenario_1711 (bench2drive_00.xml)")
-    print("场景描述: Town12 - 停车切入场景 (ParkingCutIn)")
+    print(f"测试场景: {scenario_file}")
     print("特性: CARLA图形界面 + Pygame实时可视化 (默认原始大小不缩放)")
     print("控制: 按3=原始大小 1=适应窗口 2=填充 4=自定义 +/-=缩放")
     print()
     
     # 检查必要文件
-    if not os.path.exists("./leaderboard/data/bench2drive_split/bench2drive_00.xml"):
-        print("❌ 目标场景文件不存在: bench2drive_00.xml")
+    scenario_path = f"./leaderboard/data/bench2drive_split/{scenario_file}"
+    if not os.path.exists(scenario_path):
+        print(f"❌ 目标场景文件不存在: {scenario_file}")
+        print("💡 使用 --list-scenarios 查看可用场景")
         return
     
     if not os.path.exists("./team_code/agent_simlingo.py"):
         print("❌ Agent文件不存在")
         return
     
-    if not os.path.exists("./outputs/simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt"):
+    if not os.path.exists("./output/simlingo/checkpoints/epoch=013.ckpt/pytorch_model.pt"):
         print("❌ 模型文件不存在")
         return
     
@@ -317,17 +350,19 @@ def main():
     print()
     
     # 运行测试
-    success = run_test()
+    success = run_test(scenario_file)
     
     if success:
         print("\n🎉 测试成功！您可以继续运行完整的评估脚本")
+        print(f"💡 下次可以用其他场景测试: python test_single_scenario.py --scenario bench2drive_XX.xml")
     else:
-        print("\n�� 测试失败，请检查上面的错误信息")
+        print("\n😔 测试失败，请检查上面的错误信息")
         print("常见解决方案：")
         print("1. 检查CARLA是否正确安装")
         print("2. 检查Python环境和依赖库")
         print("3. 检查GPU内存是否足够")
         print("4. 尝试在CPU模式下运行")
+        print("5. 使用 --list-scenarios 查看可用场景")
 
 if __name__ == "__main__":
     main()
