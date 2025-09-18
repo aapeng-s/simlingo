@@ -46,6 +46,23 @@ from team_code.simlingo_utils import (
     project_points,
 )
 
+# 配置变量
+DEBUG = True # saves images during evaluation (now displays in pygame)
+HD_VIZ = False
+USE_UKF = True
+USE_PYGAME_VIZ = True # 使用pygame实时显示而不是保存文件
+
+# 导入pygame可视化器
+if USE_PYGAME_VIZ:
+    try:
+        from team_code.pygame_visualizer import display_image, start_visualization, stop_visualization
+        PYGAME_AVAILABLE = True
+    except ImportError as e:
+        print(f"⚠️ 无法导入pygame可视化器: {e}")
+        PYGAME_AVAILABLE = False
+else:
+    PYGAME_AVAILABLE = False
+
 # Configure pytorch for maximum performance
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.benchmark = True
@@ -56,11 +73,6 @@ torch.backends.cudnn.allow_tf32 = True
 # Leaderboard function that selects the class used as agent.
 def get_entry_point():
     return 'LingoAgent'
-
-
-DEBUG = False # saves images during evaluation
-HD_VIZ = False
-USE_UKF = True
 
 class LingoAgent(autonomous_agent.AutonomousAgent):
     """
@@ -235,6 +247,11 @@ class LingoAgent(autonomous_agent.AutonomousAgent):
             self.save_path_img = self.debug_save_path + '/images'
             Path(self.save_path_img).mkdir(parents=True, exist_ok=True)
             
+            # 启动pygame可视化器
+            if USE_PYGAME_VIZ and PYGAME_AVAILABLE:
+                print("🎮 启动pygame实时可视化...")
+                start_visualization()
+            
     def input_thread(self):
         while self.running:
             user_input = input("Enter a command for the vehicle. 1: turn left, 2: turn right, 3: lane change left, 4: lane change right, 5: stop, 6: accelerate: ")
@@ -408,7 +425,12 @@ class LingoAgent(autonomous_agent.AutonomousAgent):
             processed_image = processed_image.view(1, self.T, num_patches, C, new_height, new_width)
             
         else:
-            raise NotImplementedError(f"Encoder {self.cfg.data_module.encoder} not implemented yet")
+            # 获取编码器类型，如果配置不存在则使用默认值
+            try:
+                encoder_type = self.cfg.data_module.encoder if hasattr(self.cfg, 'data_module') and hasattr(self.cfg.data_module, 'encoder') else 'unknown'
+            except (AttributeError, KeyError):
+                encoder_type = 'unknown'
+            raise NotImplementedError(f"Encoder {encoder_type} not implemented yet. Currently only supports InternVL2.")
         
         gps_pos = self._route_planner.convert_gps_to_carla(input_data['gps'][1])
         
@@ -688,7 +710,7 @@ class LingoAgent(autonomous_agent.AutonomousAgent):
         # prepare velocity input
         gt_velocity = tick_data['speed']
 
-        if DEBUG and self.step%5 == 0:
+        if DEBUG:
             tvec = None
             rvec = None
 
@@ -759,8 +781,13 @@ class LingoAgent(autonomous_agent.AutonomousAgent):
                 for idx, line in enumerate(lines):
                         draw.text((10, y_start + y_dist*(idx)), line, font=font, fill=(255, 255, 255, 255))
 
-            # save
-            image.save(f"{self.save_path_img}/{self.step}.png")
+            # 使用pygame实时显示或保存文件
+            if USE_PYGAME_VIZ and PYGAME_AVAILABLE:
+                # 实时显示在pygame窗口
+                display_image(image)
+            else:
+                # 保存到文件
+                image.save(f"{self.save_path_img}/{self.step}.png")
             
         steer, throttle, brake = self.control_pid(pred_route, gt_velocity, pred_speed_wps)
 
@@ -861,11 +888,25 @@ class LingoAgent(autonomous_agent.AutonomousAgent):
         The leaderboard client doesn't properly clear up the agent after the route finishes so we need to do it here.
         Also writes logging files to disk.
         """
+        
+        # 停止pygame可视化器
+        if USE_PYGAME_VIZ and PYGAME_AVAILABLE:
+            print("🎮 停止pygame可视化...")
+            stop_visualization()
 
         del self.model
         del self.config
-        if self.cfg.data_module.encoder == 'llavanext':
-            del self.processor
+        
+        # 安全检查配置键是否存在，避免KeyError
+        try:
+            if hasattr(self, 'cfg') and hasattr(self.cfg, 'data_module') and hasattr(self.cfg.data_module, 'encoder'):
+                if self.cfg.data_module.encoder == 'llavanext':
+                    del self.processor
+        except (AttributeError, KeyError) as e:
+            print(f"⚠️ 清理processor时出现配置错误: {e}")
+            # 仍然尝试删除processor（如果存在）
+            if hasattr(self, 'processor'):
+                del self.processor
 
 
 # Filter Functions
