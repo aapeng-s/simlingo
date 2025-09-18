@@ -190,7 +190,7 @@ class PygameVisualizer:
                             self.screen.blit(img_surface, (x, y))
                     
                     # 显示信息
-                    info_text = font.render("SimLingo Agent - Real-time Visualization (20 FPS)", True, (255, 255, 255))
+                    info_text = font.render("SimLingo Agent - Real-time Visualization ", True, (255, 255, 255))
                     self.screen.blit(info_text, (10, 10))
                     
                     # 控制提示
@@ -204,7 +204,7 @@ class PygameVisualizer:
                     mode_info = small_font.render(f"Mode: {self.display_mode.upper()} | Custom Scale: {self.scale_factor:.1f}x", True, (150, 255, 150))
                     self.screen.blit(mode_info, (10, self.height - 45))
                     
-                    fps_info = small_font.render("Synchronized with agent inference rate (20 FPS)", True, (150, 255, 150))
+                    fps_info = small_font.render("Synchronized with agent inference rate ", True, (150, 255, 150))
                     self.screen.blit(fps_info, (10, self.height - 25))
                     
                 else:
@@ -222,7 +222,7 @@ class PygameVisualizer:
                 
                 # 更新显示
                 pygame.display.flip()
-                self.clock.tick(20)  # 20 FPS (与agent推理帧率一致)
+                self.clock.tick(20)  
                 
         except Exception as e:
             print(f"❌ Pygame显示循环出错: {e}")
